@@ -88,15 +88,23 @@ def get_correct_default_account_new_logic(third_party, type_thirdparty, item_cod
             frappe.msgprint(f"🎯 Priorité 1 - Compte article: {doc_item.get(account_field)}")
             return doc_item.get(account_field)
         
-        # PRIORITÉ 2: Compte par défaut du groupe d'articles
+        # PRIORITÉ 2: Compte par défaut du groupe d'articles - CORRECTION ICI
         if doc_item.item_group:
             try:
                 item_group_doc = frappe.get_doc("Item Group", doc_item.item_group)
-                if item_group_doc.get(f"default_{account_field}"):
-                    frappe.msgprint(f"🎯 Priorité 2 - Compte groupe: {item_group_doc.get(f'default_{account_field}')}")
-                    return item_group_doc.get(f"default_{account_field}")
-            except:
-                pass
+                
+                # ✅ CORRECTION: Accès direct aux bons noms de champs
+                if type_thirdparty == "Customer":
+                    group_account = item_group_doc.get("default_income_account")
+                else:
+                    group_account = item_group_doc.get("default_expense_account")
+                
+                if group_account:
+                    frappe.msgprint(f"🎯 Priorité 2 - Compte groupe: {group_account}")
+                    return group_account
+                    
+            except Exception as e:
+                frappe.log_error(f"Erreur accès groupe d'articles: {str(e)}")
         
         # PRIORITÉ 3: Compte par défaut de la société
         default_company_account = get_company_default_account(company, type_thirdparty)
@@ -120,7 +128,6 @@ def get_correct_default_account_new_logic(third_party, type_thirdparty, item_cod
         frappe.log_error(f"Erreur dans get_correct_default_account_new_logic: {str(e)}")
         
     return None
-
 
 def get_company_default_account(company, type_thirdparty):
     """
