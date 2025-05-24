@@ -70,7 +70,7 @@ def get_correct_default_account_new_logic(third_party, type_thirdparty, item_cod
     """
     NOUVELLE LOGIQUE DE PRIORITÉ:
     1. Compte spécifique de l'article (income_account/expense_account sur l'article)
-    2. Compte par défaut du groupe d'articles (via Item Group Defaults)
+    2. Compte par défaut du groupe d'articles (premier compte trouvé dans special_item_accountancy_code_details)
     3. Compte par défaut de la société
     4. Logique ancienne basée sur la catégorie comptable tiers (dernier recours)
     5. Compte de fallback système
@@ -88,61 +88,25 @@ def get_correct_default_account_new_logic(third_party, type_thirdparty, item_cod
             frappe.msgprint(f"🎯 Priorité 1 - Compte article: {doc_item.get(account_field)}")
             return doc_item.get(account_field)
         
-        # PRIORITÉ 2: Compte par défaut du groupe d'articles - CORRECTION COMPLÈTE
+        # PRIORITÉ 2: Compte par défaut du groupe d'articles - CORRECTION DÉFINITIVE
         if doc_item.item_group:
             try:
-                # Méthode 1: Via Item Default (méthode standard ERPNext)
-                group_defaults = frappe.db.sql("""
-                    SELECT income_account, expense_account, buying_account
-                    FROM `tabItem Default`
-                    WHERE parent = %s AND parenttype = 'Item Group' AND company = %s
-                    LIMIT 1
-                """, (doc_item.item_group, company), as_dict=True)
-                
-                if group_defaults:
-                    group_account = None
-                    if type_thirdparty == "Customer":
-                        group_account = group_defaults[0].get("income_account")
-                    else:
-                        group_account = group_defaults[0].get("expense_account") or group_defaults[0].get("buying_account")
-                    
-                    if group_account:
-                        frappe.msgprint(f"🎯 Priorité 2A - Compte groupe (Item Default): {group_account}")
-                        return group_account
-                
-                # Méthode 2: Via les champs directs (si ils existent avec des customisations)
                 item_group_doc = frappe.get_doc("Item Group", doc_item.item_group)
                 
-                # Test des différents noms de champs possibles
-                possible_fields = [
-                    "default_income_account",
-                    "income_account", 
-                    "default_expense_account",
-                    "expense_account",
-                    "buying_account"
-                ]
-                
-                for field in possible_fields:
-                    if hasattr(item_group_doc, field) and item_group_doc.get(field):
-                        if type_thirdparty == "Customer" and "income" in field:
-                            frappe.msgprint(f"🎯 Priorité 2B - Compte groupe (champ direct): {item_group_doc.get(field)}")
-                            return item_group_doc.get(field)
-                        elif type_thirdparty == "Supplier" and ("expense" in field or "buying" in field):
-                            frappe.msgprint(f"🎯 Priorité 2B - Compte groupe (champ direct): {item_group_doc.get(field)}")
-                            return item_group_doc.get(field)
-                
-                # Méthode 3: Via la table item_group_defaults (si elle existe)
-                if hasattr(item_group_doc, 'item_group_defaults') and item_group_doc.item_group_defaults:
-                    for default in item_group_doc.item_group_defaults:
-                        if default.company == company:
-                            if type_thirdparty == "Customer" and default.get("income_account"):
-                                frappe.msgprint(f"🎯 Priorité 2C - Compte groupe (table defaults): {default.income_account}")
-                                return default.income_account
-                            elif type_thirdparty == "Supplier":
-                                account = default.get("expense_account") or default.get("buying_account")
-                                if account:
-                                    frappe.msgprint(f"🎯 Priorité 2C - Compte groupe (table defaults): {account}")
-                                    return account
+                # ✅ ACCÈS À LA TABLE PERSONNALISÉE
+                if hasattr(item_group_doc, 'special_item_accountancy_code_details') and item_group_doc.special_item_accountancy_code_details:
+                    # Prendre le PREMIER compte trouvé (compte par défaut du groupe)
+                    first_detail = item_group_doc.special_item_accountancy_code_details[0]
+                    
+                    group_account = None
+                    if type_thirdparty == "Customer":
+                        group_account = first_detail.get("compte_de_produits")
+                    else:
+                        group_account = first_detail.get("compte_de_charges")
+                    
+                    if group_account:
+                        frappe.msgprint(f"🎯 Priorité 2 - Compte groupe: {group_account}")
+                        return group_account
                     
             except Exception as e:
                 frappe.log_error(f"Erreur accès groupe d'articles: {str(e)}")
@@ -384,3 +348,36 @@ def debug_item_group_structure(item_group_name):
         
     except Exception as e:
         return {"error": str(e)}
+
+
+# FONCTION DE TEST POUR VALIDATION
+@frappe.whitelist()
+def test_nouveau_code(item_code, customer=None):
+    """
+    Test de la nouvelle logique avec un article spécifique
+    """
+    try:
+        company = frappe.defaults.get_user_default("Company")
+        
+        if not customer:
+            customers = frappe.get_all("Customer", limit=1, fields=["name"])
+            customer = customers[0].name if customers else None
+        
+        result = get_correct_default_account_new_logic(
+            customer, "Customer", item_code, company
+        )
+        
+        return {
+            "item_code": item_code,
+            "customer": customer,
+            "company": company,
+            "selected_account": result,
+            "success": True
+        }
+        
+    except Exception as e:
+        return {
+            "item_code": item_code,
+            "error": str(e),
+            "success": False
+        }
