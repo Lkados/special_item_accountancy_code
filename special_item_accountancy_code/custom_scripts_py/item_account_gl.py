@@ -85,7 +85,8 @@ def get_correct_default_account_new_logic(third_party, type_thirdparty, item_cod
         
         # PRIORITÉ 1: Compte spécifique de l'article
         if doc_item.get(account_field):
-            frappe.msgprint(f"🎯 Priorité 1 - Compte article: {doc_item.get(account_field)}")
+            # ✅ SUPPRIMÉ: frappe.msgprint(f"🎯 Priorité 1 - Compte article: {doc_item.get(account_field)}")
+            frappe.logger().info(f"Priorité 1 - Compte article sélectionné: {doc_item.get(account_field)}")
             return doc_item.get(account_field)
         
         # PRIORITÉ 2: Compte par défaut du groupe d'articles - CORRECTION DÉFINITIVE
@@ -105,7 +106,8 @@ def get_correct_default_account_new_logic(third_party, type_thirdparty, item_cod
                         group_account = first_detail.get("compte_de_charges")
                     
                     if group_account:
-                        frappe.msgprint(f"🎯 Priorité 2 - Compte groupe: {group_account}")
+                        # ✅ SUPPRIMÉ: frappe.msgprint(f"🎯 Priorité 2 - Compte groupe: {group_account}")
+                        frappe.logger().info(f"Priorité 2 - Compte groupe sélectionné: {group_account}")
                         return group_account
                     
             except Exception as e:
@@ -114,19 +116,22 @@ def get_correct_default_account_new_logic(third_party, type_thirdparty, item_cod
         # PRIORITÉ 3: Compte par défaut de la société
         default_company_account = get_company_default_account(company, type_thirdparty)
         if default_company_account:
-            frappe.msgprint(f"🎯 Priorité 3 - Compte société: {default_company_account}")
+            # ✅ SUPPRIMÉ: frappe.msgprint(f"🎯 Priorité 3 - Compte société: {default_company_account}")
+            frappe.logger().info(f"Priorité 3 - Compte société sélectionné: {default_company_account}")
             return default_company_account
         
         # PRIORITÉ 4: Logique ancienne basée sur la catégorie comptable tiers (dernier recours)
         legacy_account = get_correct_default_account_legacy(third_party, type_thirdparty, item_code)
         if legacy_account:
-            frappe.msgprint(f"⚠️ Priorité 4 - Compte tiers (dernier recours): {legacy_account}")
+            # ✅ SUPPRIMÉ: frappe.msgprint(f"⚠️ Priorité 4 - Compte tiers (dernier recours): {legacy_account}")
+            frappe.logger().warning(f"Priorité 4 - Compte tiers utilisé en dernier recours: {legacy_account}")
             return legacy_account
         
         # PRIORITÉ 5: Compte de fallback système
         fallback_account = get_system_fallback_account(company, type_thirdparty)
         if fallback_account:
-            frappe.msgprint(f"🚨 Priorité 5 - Compte fallback: {fallback_account}")
+            # ✅ SUPPRIMÉ: frappe.msgprint(f"🚨 Priorité 5 - Compte fallback: {fallback_account}")
+            frappe.logger().error(f"Priorité 5 - Compte fallback utilisé: {fallback_account}")
             return fallback_account
             
     except Exception as e:
@@ -350,11 +355,11 @@ def debug_item_group_structure(item_group_name):
         return {"error": str(e)}
 
 
-# FONCTION DE TEST POUR VALIDATION
+# FONCTION DE TEST POUR VALIDATION - SANS POP-UP
 @frappe.whitelist()
 def test_nouveau_code(item_code, customer=None):
     """
-    Test de la nouvelle logique avec un article spécifique
+    Test de la nouvelle logique avec un article spécifique - VERSION SILENCIEUSE
     """
     try:
         company = frappe.defaults.get_user_default("Company")
@@ -372,7 +377,8 @@ def test_nouveau_code(item_code, customer=None):
             "customer": customer,
             "company": company,
             "selected_account": result,
-            "success": True
+            "success": True,
+            "message": f"Compte sélectionné: {result}" if result else "Aucun compte trouvé"
         }
         
     except Exception as e:
